@@ -59,7 +59,7 @@
   }
   .hero-title em { font-style: italic; color: var(--amber); }
   .hero-sub {
-    font-size: 14px; color: var(--text-2); max-width: 460px;
+    font-size: 15px; color: var(--text-2); max-width: 460px;
     line-height: 1.75; font-weight: 300; margin-bottom: 40px;
   }
   .hero-link {
@@ -72,27 +72,39 @@
 
   /* ── IN-PAGE FILTER ── */
   .filter-row {
-    display: flex; align-items: center; gap: 10px;
-    flex-wrap: wrap; padding-bottom: 40px;
+    display: flex; align-items: center; gap: 0;
+    flex-wrap: wrap;
+    padding-bottom: 20px;
+    margin-bottom: 36px;
+    border-bottom: 1px solid var(--border);
   }
   #filterBar {
-    display: flex; gap: 8px; flex-wrap: wrap;
+    display: flex; gap: 32px; flex-wrap: wrap; align-items: center;
   }
   .filter-label {
-    font-size: 11px; color: var(--text-3); letter-spacing: 0.1em;
-    text-transform: uppercase; margin-right: 4px; white-space: nowrap;
+    font-size: 9px; color: var(--text-3); letter-spacing: 0.22em;
+    text-transform: uppercase; white-space: nowrap; margin-right: 32px;
   }
   .filter-btn {
-    padding: 6px 16px; border-radius: 20px;
-    border: 1px solid var(--border); background: var(--surface);
-    color: var(--text-2); font-family: 'DM Sans', sans-serif;
-    font-size: 12px; font-weight: 400; cursor: pointer; white-space: nowrap;
-    transition: all 0.18s;
+    padding: 6px 0;
+    border: none; background: none;
+    color: var(--text-3); font-family: 'DM Sans', sans-serif;
+    font-size: 11px; font-weight: 400;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    cursor: pointer; white-space: nowrap;
+    position: relative;
+    transition: color 0.18s;
   }
-  .filter-btn:hover { color: var(--text-1); border-color: var(--text-3); }
-  .filter-btn.active {
-    background: var(--amber); border-color: var(--amber);
-    color: #fff; font-weight: 500;
+  .filter-btn:hover { color: var(--text-1); }
+  .filter-btn.active { color: var(--text-1); font-weight: 500; }
+  /* hand-drawn oval around active item */
+  .filter-btn.active::after {
+    content: '';
+    position: absolute;
+    inset: -7px -14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 74' preserveAspectRatio='none' fill='none'%3E%3Cpath d='M80,8 C92,14 102,26 102,38 C102,55 86,67 57,67 C28,67 7,55 7,38 C7,21 26,9 50,7 C58,6 68,6 76,8' stroke='%230369A1' stroke-width='1.6' fill='none' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E");
+    background-size: 100% 100%;
+    pointer-events: none;
   }
 
   /* ── GRID ── */
@@ -108,7 +120,7 @@
   }
   .category-header h2 {
     font-family: 'Cormorant Garamond', serif;
-    font-size: 21px; font-weight: 300; color: var(--text-1);
+    font-size: 21px; font-weight: 600; color: var(--text-1);
   }
   .cat-count { font-size: 11px; color: var(--text-3); letter-spacing: 0.05em; }
 
@@ -236,7 +248,7 @@
   }
   .expand-text {
     font-family: 'Libre Baskerville', serif;
-    font-size: 11.5px; color: var(--text-2); line-height: 1.65;
+    font-size: 13px; color: var(--text-2); line-height: 1.7;
   }
   .expand-text.is-quote { font-style: italic; }
 
@@ -245,15 +257,15 @@
 
   .book-title {
     font-family: 'Libre Baskerville', serif;
-    font-size: 13px; font-weight: 400; color: var(--text-1);
-    line-height: 1.45; margin-bottom: 4px;
+    font-size: 14px; font-weight: 400; color: var(--text-1);
+    line-height: 1.55; margin-bottom: 4px;
     display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
 
   .book-author {
     font-family: 'DM Sans', sans-serif;
-    font-size: 11px; color: var(--text-3);
+    font-size: 12px; color: var(--text-3);
     font-weight: 300; letter-spacing: 0.01em;
   }
 
@@ -274,7 +286,7 @@
 <section class="hero">
   <div class="hero-eyebrow">Book recs from the pod</div>
   <h1 class="hero-title">What the best<br>builders <em>read</em></h1>
-  <p class="hero-sub">Every book recommended by a guest on <a href="https://www.youtube.com/@lennyrachitsky" target="_blank" rel="noopener" class="hero-link">Lenny's Podcast</a> — the go-to show for product managers, founders, and operators. Distilled from ~300 episode transcripts. Hover any cover to see why it was recommended — and order directly on Amazon.</p>
+  <p class="hero-sub">Every book recommended by a guest on <a href="https://www.youtube.com/@LennysPodcast" target="_blank" rel="noopener" class="hero-link">Lenny's Podcast</a> — the go-to show for product managers, founders, and operators. Distilled from ~300 episode transcripts. Hover any cover to see why it was recommended — and order directly on Amazon.</p>
   <div class="filter-row">
     <span class="filter-label">Browse</span>
     <div id="filterBar"></div>

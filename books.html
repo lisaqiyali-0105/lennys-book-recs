@@ -59,7 +59,7 @@
   }
   .hero-title em { font-style: italic; color: var(--amber); }
   .hero-sub {
-    font-size: 14px; color: var(--text-2); max-width: 460px;
+    font-size: 15px; color: var(--text-2); max-width: 460px;
     line-height: 1.75; font-weight: 300; margin-bottom: 40px;
   }
   .hero-link {
@@ -120,7 +120,7 @@
   }
   .category-header h2 {
     font-family: 'Cormorant Garamond', serif;
-    font-size: 21px; font-weight: 300; color: var(--text-1);
+    font-size: 21px; font-weight: 600; color: var(--text-1);
   }
   .cat-count { font-size: 11px; color: var(--text-3); letter-spacing: 0.05em; }
 
@@ -248,7 +248,7 @@
   }
   .expand-text {
     font-family: 'Libre Baskerville', serif;
-    font-size: 11.5px; color: var(--text-2); line-height: 1.65;
+    font-size: 13px; color: var(--text-2); line-height: 1.7;
   }
   .expand-text.is-quote { font-style: italic; }
 
@@ -257,15 +257,15 @@
 
   .book-title {
     font-family: 'Libre Baskerville', serif;
-    font-size: 13px; font-weight: 400; color: var(--text-1);
-    line-height: 1.45; margin-bottom: 4px;
+    font-size: 14px; font-weight: 400; color: var(--text-1);
+    line-height: 1.55; margin-bottom: 4px;
     display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
 
   .book-author {
     font-family: 'DM Sans', sans-serif;
-    font-size: 11px; color: var(--text-3);
+    font-size: 12px; color: var(--text-3);
     font-weight: 300; letter-spacing: 0.01em;
   }
 
@@ -742,7 +742,7 @@ function render() {
       .filter(b => b.recommenders.length > 1 && b.recommenders[0] !== "multiple guests")
       .sort(sortBooks);
     if (topBooks.length) {
-      grid.appendChild(renderSection("🌟🌟🌟🌟🌟 Most Recommended", "Mentioned by 2+ guests", topBooks, 0));
+      grid.appendChild(renderSection("Most Recommended", "Mentioned by 2+ guests", topBooks, 0));
     }
     const groups = {};
     BOOKS.forEach(b => { (groups[b.category] = groups[b.category] || []).push(b); });
