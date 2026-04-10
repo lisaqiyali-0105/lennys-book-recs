@@ -215,7 +215,8 @@
     transition: opacity 0.22s ease;
     pointer-events: none;
   }
-  .book-card:hover .cover-overlay { opacity: 1; pointer-events: auto; }
+  .book-card:hover .cover-overlay,
+  .book-card.tapped .cover-overlay { opacity: 1; pointer-events: auto; }
 
   .overlay-amazon {
     display: block;
@@ -232,7 +233,8 @@
     transition: max-height 0.32s ease, box-shadow 0.22s ease;
     background: var(--bg);
   }
-  .book-card:hover .expand-panel {
+  .book-card:hover .expand-panel,
+  .book-card.tapped .expand-panel {
     box-shadow: 0 8px 24px rgba(3,105,161,0.13), 0 2px 8px rgba(0,0,0,0.07);
     /* max-height set per-row by JS */
   }
@@ -1624,7 +1626,7 @@ function measureAndEqualize() {
       });
     });
 
-    // Attach hover listeners
+    // Attach hover listeners (desktop)
     cards.forEach(card => {
       const panel = card.querySelector('.expand-panel');
       if (!panel) return;
@@ -1635,6 +1637,48 @@ function measureAndEqualize() {
       card.addEventListener('mouseenter', card._enterFn);
       card.addEventListener('mouseleave', card._leaveFn);
     });
+
+    // Attach tap listeners (mobile)
+    cards.forEach(card => {
+      const panel = card.querySelector('.expand-panel');
+      const overlay = card.querySelector('.cover-overlay');
+      if (!panel) return;
+
+      card.removeEventListener('touchstart', card._tapFn);
+      card._tapFn = (e) => {
+        const isTapped = card.classList.contains('tapped');
+        // Close all other cards
+        document.querySelectorAll('.book-card.tapped').forEach(c => {
+          if (c !== card) {
+            c.classList.remove('tapped');
+            const p = c.querySelector('.expand-panel');
+            if (p) p.style.maxHeight = '0';
+          }
+        });
+        if (isTapped) {
+          // Second tap — allow navigation to Amazon
+          return;
+        }
+        // First tap — show info, prevent navigation
+        e.preventDefault();
+        card.classList.add('tapped');
+        panel.style.maxHeight = (card._expandH || 300) + 'px';
+      };
+      card.addEventListener('touchstart', card._tapFn, { passive: false });
+    });
+
+    // Tap outside closes all
+    document.removeEventListener('touchstart', document._closeTapFn);
+    document._closeTapFn = (e) => {
+      if (!e.target.closest('.book-card')) {
+        document.querySelectorAll('.book-card.tapped').forEach(c => {
+          c.classList.remove('tapped');
+          const p = c.querySelector('.expand-panel');
+          if (p) p.style.maxHeight = '0';
+        });
+      }
+    };
+    document.addEventListener('touchstart', document._closeTapFn, { passive: true });
   });
 }
 

@@ -10,6 +10,9 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,7 +69,7 @@ def run_claude(prompt: str) -> str:
     env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + env.get("PATH", "")
 
     result = subprocess.run(
-        ["claude", "--print", "--model", "claude-sonnet-4-6", prompt],
+        ["claude", "--print", "--dangerously-skip-permissions", "--model", "claude-sonnet-4-6", prompt],
         capture_output=True,
         text=True,
         env=env,
@@ -199,6 +202,71 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int]:
 
     return existing, added
 
+# ── Cover fetching ───────────────────────────────────────────────────────────
+
+def check_cover_url(url, threshold=8000):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return len(r.read()) > threshold
+    except:
+        return False
+
+def fetch_cover_google(title, author=""):
+    query = urllib.parse.urlencode({"q": f"intitle:{title} inauthor:{author}", "maxResults": 3})
+    url = f"https://www.googleapis.com/books/v1/volumes?{query}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        for item in data.get("items", []):
+            links = item.get("volumeInfo", {}).get("imageLinks", {})
+            img = links.get("large") or links.get("medium") or links.get("thumbnail")
+            if img:
+                img = img.replace("zoom=1", "zoom=2").replace("http://", "https://")
+                if check_cover_url(img, threshold=3000):
+                    return img
+    except:
+        pass
+    return None
+
+def fetch_cover_openlibrary(title, author=""):
+    query = urllib.parse.urlencode({"q": f"{title} {author}", "fields": "cover_i", "limit": 5})
+    url = f"https://openlibrary.org/search.json?{query}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        for doc in data.get("docs", []):
+            if doc.get("cover_i"):
+                candidate = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
+                if check_cover_url(candidate):
+                    return candidate
+    except:
+        pass
+    return None
+
+def ensure_covers(books):
+    """Verify all covers load; fetch replacements for any that are broken or missing."""
+    fixed = 0
+    for book in books:
+        url = book.get("cover", "")
+        if url and check_cover_url(url):
+            continue
+        # Cover missing or broken — fetch a new one
+        title, author = book["title"], book.get("author", "")
+        new_url = fetch_cover_google(title, author) or fetch_cover_openlibrary(title, author)
+        if new_url:
+            book["cover"] = new_url
+            fixed += 1
+            log(f"  Fixed cover for '{title}'")
+        else:
+            log(f"  WARNING: no cover found for '{title}'")
+        time.sleep(0.3)
+    if fixed:
+        log(f"  Fixed {fixed} cover(s)")
+    return books
+
 # ── Rebuild HTML files ────────────────────────────────────────────────────────
 
 def rebuild_html(books: list):
@@ -270,6 +338,8 @@ def main():
             latest_date = ep["date"]
 
     if total_added > 0:
+        log("Verifying all covers...")
+        books = ensure_covers(books)
         save_books(books)
         rebuild_html(books)
         git_push(

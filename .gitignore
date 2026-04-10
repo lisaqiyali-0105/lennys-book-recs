@@ -1,7 +1,21 @@
+# Design explorations (not part of the published site)
 badge-concepts.html
 badge-color-compare.html
 badge-options.html
 quote-options.html
+oval-options.html
+icon-options.html
+
+# Internal task files
 TASK-add-recommendation-reasons.md
+
+# Private content (podcast transcripts, newsletters — large files, not public)
 newsletters/
 podcasts/
+
+# Runtime logs
+data/cron.log
+data/update.log
+
+# macOS
+.DS_Store
