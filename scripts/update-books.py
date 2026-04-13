@@ -210,7 +210,13 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int, int, list]:
 # ── Cover fetching ───────────────────────────────────────────────────────────
 
 COVERS_DIR = REPO_DIR / "covers"
-LOCAL_COVER_MIN_BYTES = 15000
+LOCAL_COVER_MIN_BYTES = 10000
+
+# Known placeholder images returned by Google Books / Open Library for missing covers.
+# These pass size checks but are generic "no image available" graphics.
+PLACEHOLDER_HASHES = {
+    'c96309220b9cbd205c36d879d09a3647',  # Google Books placeholder (~15.5KB)
+}
 
 def title_to_slug(title):
     return re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
@@ -230,7 +236,8 @@ def _http_get(url, timeout=10):
 def download_to_local(url, dest_path):
     try:
         data = _http_get(url, timeout=15)
-        if len(data) > LOCAL_COVER_MIN_BYTES:
+        import hashlib
+        if len(data) > LOCAL_COVER_MIN_BYTES and hashlib.md5(data).hexdigest() not in PLACEHOLDER_HASHES:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_bytes(data)
             return True
