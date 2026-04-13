@@ -163,25 +163,24 @@ def find_new_episodes(last_date: str) -> list:
 
 # ── Merge new books into existing list ───────────────────────────────────────
 
-def merge_books(existing: list, new_books: list) -> tuple[list, int, int]:
+def merge_books(existing: list, new_books: list) -> tuple[list, int, int, list]:
     """
     Merge new books into existing list.
     If a book already exists (matched by title, case-insensitive), add the new
     recommender to its recommenders list. Otherwise append as a new entry.
-    Returns (merged_list, count_new_books, count_new_recommenders).
+    Returns (merged_list, count_new_books, count_new_recommenders, new_entries).
     """
-    # Build lookup by normalized title
     index = {b["title"].lower().strip(): i for i, b in enumerate(existing)}
     added = 0
     new_recs = 0
+    new_entries = []
 
     for nb in new_books:
         title_key = nb["title"].lower().strip()
         if not nb.get("title") or not nb.get("author"):
-            continue  # skip incomplete entries
+            continue
 
         if title_key in index:
-            # Book exists — add recommender if not already listed
             book = existing[index[title_key]]
             recs = book.get("recommenders", [])
             if nb["recommender"] not in recs:
@@ -190,7 +189,6 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int, int]:
                 new_recs += 1
                 log(f"  + New recommender for '{nb['title']}': {nb['recommender']}")
         else:
-            # New book
             category = nb.get("category", "Other")
             if category not in VALID_CATEGORIES:
                 category = "Other"
@@ -202,11 +200,12 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int, int]:
                 "reason":       nb.get("reason", ""),
             }
             existing.append(entry)
+            new_entries.append(entry)
             index[title_key] = len(existing) - 1
             added += 1
             log(f"  + New book: '{nb['title']}' by {nb['author']}")
 
-    return existing, added, new_recs
+    return existing, added, new_recs, new_entries
 
 # ── Cover fetching ───────────────────────────────────────────────────────────
 
@@ -220,60 +219,49 @@ def is_local_path(s):
     return s and not s.startswith("http://") and not s.startswith("https://")
 
 def local_cover_ok(rel_path):
-    """Return True if a local cover file exists and is large enough to be a real image."""
     full = REPO_DIR / rel_path
     return full.exists() and full.stat().st_size > LOCAL_COVER_MIN_BYTES
 
+def _http_get(url, timeout=10):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
 def download_to_local(url, dest_path):
-    """Download a remote URL to dest_path. Returns True only if file is >15KB."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = r.read()
+        data = _http_get(url, timeout=15)
         if len(data) > LOCAL_COVER_MIN_BYTES:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             dest_path.write_bytes(data)
             return True
-    except:
+    except Exception:
         pass
     return False
 
 def find_remote_cover_url(title, author=""):
     """Search Google Books then Open Library for a candidate remote URL."""
-    # Google Books
     try:
         query = urllib.parse.urlencode({"q": f"intitle:{title} inauthor:{author}", "maxResults": 5})
-        req = urllib.request.Request(
-            f"https://www.googleapis.com/books/v1/volumes?{query}",
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            data = json.loads(r.read())
+        data = json.loads(_http_get(f"https://www.googleapis.com/books/v1/volumes?{query}"))
         for item in data.get("items", []):
             links = item.get("volumeInfo", {}).get("imageLinks", {})
             img = links.get("large") or links.get("medium") or links.get("thumbnail")
             if img:
                 return img.replace("zoom=1", "zoom=2").replace("http://", "https://")
-    except:
+    except Exception:
         pass
-    # Open Library
     try:
         query = urllib.parse.urlencode({"q": f"{title} {author}", "fields": "cover_i", "limit": 5})
-        req = urllib.request.Request(
-            f"https://openlibrary.org/search.json?{query}",
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            data = json.loads(r.read())
+        data = json.loads(_http_get(f"https://openlibrary.org/search.json?{query}"))
         for doc in data.get("docs", []):
             if doc.get("cover_i"):
                 return f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
-    except:
+    except Exception:
         pass
     return None
 
 def ensure_covers(books):
-    """Ensure every book has a valid local cover file. Never stores remote URLs."""
+    """Fetch and store a local cover for each book that doesn't already have one."""
     COVERS_DIR.mkdir(parents=True, exist_ok=True)
     fixed = 0
     for book in books:
@@ -281,25 +269,23 @@ def ensure_covers(books):
         slug = title_to_slug(title)
         existing = book.get("cover", "")
 
-        # Already a valid local file — leave it alone
         if is_local_path(existing) and local_cover_ok(existing):
             continue
 
         dest = COVERS_DIR / f"{slug}.jpg"
+        cover_rel = f"covers/{slug}.jpg"
 
-        # If we have a remote URL, try downloading it first
         if existing and not is_local_path(existing):
             if download_to_local(existing, dest):
-                book["cover"] = f"covers/{slug}.jpg"
+                book["cover"] = cover_rel
                 fixed += 1
                 log(f"  Downloaded cover for '{title}'")
                 time.sleep(0.1)
                 continue
 
-        # No usable URL — search for one and download it
         remote = find_remote_cover_url(title, author)
         if remote and download_to_local(remote, dest):
-            book["cover"] = f"covers/{slug}.jpg"
+            book["cover"] = cover_rel
             fixed += 1
             log(f"  Fixed cover for '{title}'")
         else:
@@ -308,7 +294,6 @@ def ensure_covers(books):
 
     if fixed:
         log(f"  Fixed {fixed} cover(s)")
-    return books
 
 # ── Rebuild HTML files ────────────────────────────────────────────────────────
 
@@ -368,27 +353,29 @@ def main():
         save_state(state)
         return
 
-    total_added  = 0
+    total_added    = 0
     total_new_recs = 0
-    latest_date  = last_dt
+    all_new_entries = []
+    latest_date    = last_dt
 
     for ep in new_episodes:
         new_books_raw = extract_books_from_episode(
             ep["filename"], ep["guest"], ep["date"]
         )
         if new_books_raw:
-            books, added, new_recs = merge_books(books, new_books_raw)
-            total_added += added
+            books, added, new_recs, new_entries = merge_books(books, new_books_raw)
+            total_added    += added
             total_new_recs += new_recs
+            all_new_entries.extend(new_entries)
 
-        # Track the furthest date we've processed
         if ep["date"] > latest_date:
             latest_date = ep["date"]
 
     total_changed = total_added + total_new_recs
     if total_changed > 0:
-        log("Verifying all covers...")
-        books = ensure_covers(books)
+        if all_new_entries:
+            log("Verifying covers for new books...")
+            ensure_covers(all_new_entries)
         save_books(books)
         rebuild_html(books)
         parts = []
