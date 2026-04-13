@@ -24,8 +24,9 @@ INDEX_HTML  = REPO_DIR / "index.html"
 LOG_FILE    = REPO_DIR / "data" / "update.log"
 
 VALID_CATEGORIES = [
-    "Product", "Strategy", "Leadership", "Growth",
-    "Psychology", "Engineering", "Marketing", "Design", "Other"
+    "Product & Design", "Strategy", "Leadership", "Growth",
+    "Behavioral", "Personal", "Fiction", "Writing",
+    "Psychology", "Engineering", "Marketing", "Other"
 ]
 
 # ── Logging ─────────────────────────────────────────────────────────────────
@@ -75,9 +76,12 @@ def run_claude(prompt: str) -> str:
         env=env,
         timeout=300,
     )
+    stdout = result.stdout.strip()
     if result.returncode != 0:
-        raise RuntimeError(f"claude CLI failed:\n{result.stderr[:500]}")
-    return result.stdout.strip()
+        if not stdout:
+            raise RuntimeError(f"claude CLI failed:\n{result.stderr[:500]}")
+        log(f"WARNING: claude CLI exited {result.returncode} but produced output (hook noise likely)")
+    return stdout
 
 # ── Extract books from a transcript via Claude ───────────────────────────────
 
@@ -95,7 +99,7 @@ Return ONLY a valid JSON array (no markdown, no explanation). Each item:
 {{
   "title": "Book Title",
   "author": "Author Name",
-  "category": "one of: Product, Strategy, Leadership, Growth, Psychology, Engineering, Marketing, Design, Other",
+  "category": "one of: Product & Design, Strategy, Leadership, Growth, Behavioral, Personal, Fiction, Writing, Psychology, Engineering, Marketing, Other",
   "recommender": "{guest}",
   "reason": "1-2 sentence summary of why they mentioned it or what they said about it. Do NOT use quotation marks — this is a summary, not a verbatim quote."
 }}
@@ -159,16 +163,17 @@ def find_new_episodes(last_date: str) -> list:
 
 # ── Merge new books into existing list ───────────────────────────────────────
 
-def merge_books(existing: list, new_books: list) -> tuple[list, int]:
+def merge_books(existing: list, new_books: list) -> tuple[list, int, int]:
     """
     Merge new books into existing list.
     If a book already exists (matched by title, case-insensitive), add the new
     recommender to its recommenders list. Otherwise append as a new entry.
-    Returns (merged_list, count_added).
+    Returns (merged_list, count_new_books, count_new_recommenders).
     """
     # Build lookup by normalized title
     index = {b["title"].lower().strip(): i for i, b in enumerate(existing)}
     added = 0
+    new_recs = 0
 
     for nb in new_books:
         title_key = nb["title"].lower().strip()
@@ -182,6 +187,7 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int]:
             if nb["recommender"] not in recs:
                 recs.append(nb["recommender"])
                 book["recommenders"] = recs
+                new_recs += 1
                 log(f"  + New recommender for '{nb['title']}': {nb['recommender']}")
         else:
             # New book
@@ -200,69 +206,106 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int]:
             added += 1
             log(f"  + New book: '{nb['title']}' by {nb['author']}")
 
-    return existing, added
+    return existing, added, new_recs
 
 # ── Cover fetching ───────────────────────────────────────────────────────────
 
-def check_cover_url(url, threshold=8000):
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return len(r.read()) > threshold
-    except:
-        return False
+COVERS_DIR = REPO_DIR / "covers"
+LOCAL_COVER_MIN_BYTES = 15000
 
-def fetch_cover_google(title, author=""):
-    query = urllib.parse.urlencode({"q": f"intitle:{title} inauthor:{author}", "maxResults": 3})
-    url = f"https://www.googleapis.com/books/v1/volumes?{query}"
+def title_to_slug(title):
+    return re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+
+def is_local_path(s):
+    return s and not s.startswith("http://") and not s.startswith("https://")
+
+def local_cover_ok(rel_path):
+    """Return True if a local cover file exists and is large enough to be a real image."""
+    full = REPO_DIR / rel_path
+    return full.exists() and full.stat().st_size > LOCAL_COVER_MIN_BYTES
+
+def download_to_local(url, dest_path):
+    """Download a remote URL to dest_path. Returns True only if file is >15KB."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = r.read()
+        if len(data) > LOCAL_COVER_MIN_BYTES:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest_path.write_bytes(data)
+            return True
+    except:
+        pass
+    return False
+
+def find_remote_cover_url(title, author=""):
+    """Search Google Books then Open Library for a candidate remote URL."""
+    # Google Books
+    try:
+        query = urllib.parse.urlencode({"q": f"intitle:{title} inauthor:{author}", "maxResults": 5})
+        req = urllib.request.Request(
+            f"https://www.googleapis.com/books/v1/volumes?{query}",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
         for item in data.get("items", []):
             links = item.get("volumeInfo", {}).get("imageLinks", {})
             img = links.get("large") or links.get("medium") or links.get("thumbnail")
             if img:
-                img = img.replace("zoom=1", "zoom=2").replace("http://", "https://")
-                if check_cover_url(img, threshold=3000):
-                    return img
+                return img.replace("zoom=1", "zoom=2").replace("http://", "https://")
     except:
         pass
-    return None
-
-def fetch_cover_openlibrary(title, author=""):
-    query = urllib.parse.urlencode({"q": f"{title} {author}", "fields": "cover_i", "limit": 5})
-    url = f"https://openlibrary.org/search.json?{query}"
+    # Open Library
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        query = urllib.parse.urlencode({"q": f"{title} {author}", "fields": "cover_i", "limit": 5})
+        req = urllib.request.Request(
+            f"https://openlibrary.org/search.json?{query}",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
         for doc in data.get("docs", []):
             if doc.get("cover_i"):
-                candidate = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
-                if check_cover_url(candidate):
-                    return candidate
+                return f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
     except:
         pass
     return None
 
 def ensure_covers(books):
-    """Verify all covers load; fetch replacements for any that are broken or missing."""
+    """Ensure every book has a valid local cover file. Never stores remote URLs."""
+    COVERS_DIR.mkdir(parents=True, exist_ok=True)
     fixed = 0
     for book in books:
-        url = book.get("cover", "")
-        if url and check_cover_url(url):
-            continue
-        # Cover missing or broken — fetch a new one
         title, author = book["title"], book.get("author", "")
-        new_url = fetch_cover_google(title, author) or fetch_cover_openlibrary(title, author)
-        if new_url:
-            book["cover"] = new_url
+        slug = title_to_slug(title)
+        existing = book.get("cover", "")
+
+        # Already a valid local file — leave it alone
+        if is_local_path(existing) and local_cover_ok(existing):
+            continue
+
+        dest = COVERS_DIR / f"{slug}.jpg"
+
+        # If we have a remote URL, try downloading it first
+        if existing and not is_local_path(existing):
+            if download_to_local(existing, dest):
+                book["cover"] = f"covers/{slug}.jpg"
+                fixed += 1
+                log(f"  Downloaded cover for '{title}'")
+                time.sleep(0.1)
+                continue
+
+        # No usable URL — search for one and download it
+        remote = find_remote_cover_url(title, author)
+        if remote and download_to_local(remote, dest):
+            book["cover"] = f"covers/{slug}.jpg"
             fixed += 1
             log(f"  Fixed cover for '{title}'")
         else:
             log(f"  WARNING: no cover found for '{title}'")
         time.sleep(0.3)
+
     if fixed:
         log(f"  Fixed {fixed} cover(s)")
     return books
@@ -296,14 +339,17 @@ def rebuild_html(books: list):
 
 def git_push(message: str):
     os.chdir(REPO_DIR)
-    subprocess.run(["git", "add", "data/books.json", "data/state.json", "index.html", "books.html"], check=True)
+    subprocess.run(["git", "add", "data/books.json", "data/state.json", "index.html", "books.html", "covers/"], check=True)
     result = subprocess.run(["git", "diff", "--cached", "--quiet"])
     if result.returncode == 0:
         log("Nothing to commit — no changes detected")
         return
     subprocess.run(["git", "commit", "-m", message], check=True)
-    subprocess.run(["git", "push", "origin", "main"], check=True)
-    log("Pushed to GitHub Pages")
+    try:
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        log("Pushed to GitHub Pages")
+    except subprocess.CalledProcessError as e:
+        log(f"WARNING: git push failed — changes committed locally but not pushed: {e}")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -323,6 +369,7 @@ def main():
         return
 
     total_added  = 0
+    total_new_recs = 0
     latest_date  = last_dt
 
     for ep in new_episodes:
@@ -330,23 +377,30 @@ def main():
             ep["filename"], ep["guest"], ep["date"]
         )
         if new_books_raw:
-            books, added = merge_books(books, new_books_raw)
+            books, added, new_recs = merge_books(books, new_books_raw)
             total_added += added
+            total_new_recs += new_recs
 
         # Track the furthest date we've processed
         if ep["date"] > latest_date:
             latest_date = ep["date"]
 
-    if total_added > 0:
+    total_changed = total_added + total_new_recs
+    if total_changed > 0:
         log("Verifying all covers...")
         books = ensure_covers(books)
         save_books(books)
         rebuild_html(books)
+        parts = []
+        if total_added:
+            parts.append(f"{total_added} new book(s)")
+        if total_new_recs:
+            parts.append(f"{total_new_recs} new recommender(s)")
         git_push(
-            f"Auto-update: {total_added} new book(s) from {len(new_episodes)} episode(s)"
+            f"Auto-update: {', '.join(parts)} from {len(new_episodes)} episode(s)"
         )
     else:
-        log("No new books found in new episodes")
+        log("No new books or recommenders found in new episodes")
 
     state["last_processed_date"] = latest_date
     state["last_run"] = datetime.now(timezone.utc).isoformat()
