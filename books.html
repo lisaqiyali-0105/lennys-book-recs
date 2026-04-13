@@ -679,8 +679,7 @@ const BOOKS = [
       "multiple guests"
     ],
     "reason": "Berger studied the best viral messages and boiled them down to a framework — recommended for anyone who wants to understand why things spread.",
-    "asin": "1451686587",
-    "coverFallback": "https://m.media-amazon.com/images/P/1451686587._AC_SL600_.jpg"
+    "asin": "1451686587"
   },
   {
     "title": "Never Split the Difference",
@@ -800,8 +799,7 @@ const BOOKS = [
       "Yuriy Timen"
     ],
     "reason": "Yuriy Timen calls it a remarkable memoir on perseverance — the core lesson is that you cannot control what happens around you, only your reaction to it.",
-    "asin": "0807014273",
-    "coverFallback": "https://m.media-amazon.com/images/P/0807014273._AC_SL600_.jpg"
+    "asin": "0807014273"
   },
   {
     "title": "The Almanack of Naval Ravikant",
@@ -841,7 +839,6 @@ const BOOKS = [
     "author": "Bill Walsh",
     "category": "Personal",
     "cover": "covers/the-score-takes-care-of-itself.jpg",
-    "coverFallback": "https://m.media-amazon.com/images/P/1591843472._AC_SL600_.jpg",
     "recommenders": [
       "Pete Kazanjy"
     ],
@@ -863,7 +860,6 @@ const BOOKS = [
     "author": "Elizabeth Dunn",
     "category": "Personal",
     "cover": "covers/happy-money.jpg",
-    "coverFallback": "https://m.media-amazon.com/images/P/1451665075._AC_SL600_.jpg",
     "recommenders": [
       "Chris Hutchins"
     ],
@@ -909,8 +905,7 @@ const BOOKS = [
       "Zevi Arnovitz"
     ],
     "reason": "Zevi Arnovitz calls it one of his favorite business books — an honest, gripping account of the grit and chaos behind building Nike from nothing.",
-    "asin": "1501135910",
-    "coverFallback": "https://m.media-amazon.com/images/P/1501135910._AC_SL600_.jpg"
+    "asin": "1501135910"
   },
   {
     "title": "Tomorrow, and Tomorrow, and Tomorrow",
@@ -974,8 +969,7 @@ const BOOKS = [
       "Eeke de Milliano"
     ],
     "reason": "Eeke de Milliano calls it incredible and recommends it to PMs specifically — because great product managers need to be great writers.",
-    "asin": "0385480016",
-    "coverFallback": "https://m.media-amazon.com/images/P/0385480016._AC_SL600_.jpg"
+    "asin": "0385480016"
   },
   {
     "title": "Where Good Ideas Come From",
@@ -1132,8 +1126,7 @@ const BOOKS = [
     ],
     "reason": "Really good frameworks for building businesses under uncertainty.",
     "cover": "covers/great-by-choice.jpg",
-    "asin": "0062120999",
-    "coverFallback": "https://m.media-amazon.com/images/P/0062120999._AC_SL600_.jpg"
+    "asin": "0062120999"
   },
   {
     "title": "Founding Sales",
@@ -1196,8 +1189,7 @@ const BOOKS = [
     ],
     "reason": "Framework for building and changing habits; winners and losers have the same goals — systems are what differ.",
     "cover": "covers/atomic-habits.jpg",
-    "asin": "0735211299",
-    "coverFallback": "https://m.media-amazon.com/images/P/0735211299._AC_SL600_.jpg"
+    "asin": "0735211299"
   },
   {
     "title": "Deep Work",
@@ -1242,8 +1234,7 @@ const BOOKS = [
     ],
     "reason": "Lenny's all-time favorite book on storytelling; he couldn't put it down and says every marketer should read it.",
     "cover": "covers/storyworthy.jpg",
-    "asin": "1608685489",
-    "coverFallback": "https://m.media-amazon.com/images/P/1608685489._AC_SL600_.jpg"
+    "asin": "1608685489"
   },
   {
     "title": "On Writing Well",
@@ -1426,8 +1417,7 @@ const BOOKS = [
     ],
     "reason": "One of Brian Tolkin's top book recommendations alongside Shoe Dog and The Design of Everyday Things.",
     "cover": "covers/the-black-swan.jpg",
-    "asin": "081297381X",
-    "coverFallback": "https://m.media-amazon.com/images/P/081297381X._AC_SL600_.jpg"
+    "asin": "081297381X"
   },
   {
     "title": "The Fire Next Time",
@@ -1468,8 +1458,7 @@ const BOOKS = [
     ],
     "reason": "Keith recommended it as a counterintuitive read on high-performance culture, arguing that high-performance machines are about winning, not psychological safety, and that aspiring leaders should model how Michael Jordan actually operated.",
     "cover": "covers/the-jordan-rules.jpg",
-    "asin": "1982165383",
-    "coverFallback": "https://m.media-amazon.com/images/P/1982165383._AC_SL600_.jpg"
+    "asin": "1982165383"
   },
   {
     "title": "Creativity, Inc.",
@@ -1498,6 +1487,8 @@ const CATEGORIES = [
 const CAT_NAMES = Object.fromEntries(CATEGORIES.filter(c => c.id !== "all").map(c => [c.id, c.label]));
 
 let active = "all";
+
+const AMAZON_COVER_URL = asin => `https://m.media-amazon.com/images/P/${asin}._AC_SL600_.jpg`;
 
 function amazonURL(book) {
   return book.amazon || `https://www.amazon.com/s?k=${encodeURIComponent(book.title + ' ' + book.author)}`;
@@ -1558,10 +1549,13 @@ function createCard(book, delay) {
       </div>
     </div>` : '';
 
+  const fallbackUrl = book.asin ? AMAZON_COVER_URL(book.asin) : (book.coverFallback || '');
+  const fallbackAttr = fallbackUrl ? ` data-fallback="${fallbackUrl}"` : '';
+
   card.innerHTML = `
     <div class="cover-wrap">
       <div class="cover-placeholder"></div>
-      ${book.cover ? `<img class="cover-img" src="${book.cover}" alt="${book.title}" loading="eager" decoding="async"${(book.asin || book.coverFallback) ? ` data-fallback="${book.asin ? `https://m.media-amazon.com/images/P/${book.asin}._AC_SL600_.jpg` : book.coverFallback}"` : ''}>` : ''}
+      ${book.cover ? `<img class="cover-img" src="${book.cover}" alt="${book.title}" loading="eager" decoding="async"${fallbackAttr}>` : ''}
       <div class="cover-overlay">
         <div class="overlay-amazon">View on Amazon →</div>
       </div>

@@ -211,6 +211,7 @@ def merge_books(existing: list, new_books: list) -> tuple[list, int, int, list]:
 
 COVERS_DIR = REPO_DIR / "covers"
 LOCAL_COVER_MIN_BYTES = 10000
+AMAZON_CDN = "https://m.media-amazon.com/images/P/{}._AC_SL600_.jpg"
 
 # Known placeholder images returned by Google Books / Open Library for missing covers.
 # These pass size checks but are generic "no image available" graphics.
@@ -281,6 +282,14 @@ def ensure_covers(books):
 
         dest = COVERS_DIR / f"{slug}.jpg"
         cover_rel = f"covers/{slug}.jpg"
+
+        asin = book.get("asin")
+        if asin and download_to_local(AMAZON_CDN.format(asin), dest):
+            book["cover"] = cover_rel
+            fixed += 1
+            log(f"  Downloaded Amazon cover for '{title}'")
+            time.sleep(0.1)
+            continue
 
         if existing and not is_local_path(existing):
             if download_to_local(existing, dest):
@@ -380,9 +389,8 @@ def main():
 
     total_changed = total_added + total_new_recs
     if total_changed > 0:
-        if all_new_entries:
-            log("Verifying covers for new books...")
-            ensure_covers(all_new_entries)
+        log("Verifying covers...")
+        ensure_covers(books)
         save_books(books)
         rebuild_html(books)
         parts = []
