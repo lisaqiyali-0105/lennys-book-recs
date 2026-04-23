@@ -1521,7 +1521,7 @@ function recLabel(recs) {
   return `Recommended by ${recs.length} guests`;
 }
 
-function capWords(text, max = 35) {
+function capWords(text, max = 60) {
   if (!text) return '';
   const words = text.split(/\s+/);
   return words.length <= max ? text : words.slice(0, max).join(' ') + '…';
